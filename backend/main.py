@@ -1,4 +1,5 @@
 from fastapi import FastAPI, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
 import tempfile, os
 
 from faster_whisper import WhisperModel
@@ -12,6 +13,15 @@ from S2T.speech2text import speech_to_text
  
 
 app = FastAPI()
+
+# 🔐 Enable CORS for frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://127.0.0.1:5500", "http://localhost:5500", "http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 model = WhisperModel("tiny", compute_type="int8")
 
