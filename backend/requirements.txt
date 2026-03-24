@@ -6,3 +6,6 @@ scipy
 scipy
 sounddevice
 faster-whisper
+uvicorn
+agno
+groq

@@ -4,6 +4,7 @@ import scipy.io.wavfile as wav
 import tempfile
 import os
 from faster_whisper import WhisperModel
+from services.agent_team import generate_response
 
 # -----------------------------
 # CONFIG
@@ -57,6 +58,7 @@ def speech_to_text(audio_array):
 # -----------------------------
 def realtime_transcription():
     full_text = ""
+    respose= ""
 
     print("🚀 Real-time transcription started (Ctrl+C to stop)\n")
 
@@ -70,11 +72,14 @@ def realtime_transcription():
                 full_text += " " + text
                 print("📝", full_text)
 
+                respose = generate_response(text)
+
     except KeyboardInterrupt:
         print("\n🛑 Stopped.")
-        print("\n📄 Final Transcript:\n", full_text)
+        print("\n📄 Final Transcript:\n", respose)
 
-    return full_text
+
+    return respose
 
 
  
