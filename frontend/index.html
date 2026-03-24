@@ -500,13 +500,16 @@ document.getElementById('multiAudioForm').addEventListener('submit', async (e) =
   
   try {
       const formData = new FormData(e.target);
-      const host = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-        ? window.location.origin 
-        : 'http://127.0.0.1:8000';
       
-      const response = await fetch(`${host}/process-multi-audio/`, {
+      // Always use http://127.0.0.1:8000 for the backend API
+      const apiUrl = 'http://127.0.0.1:8000/process-multi-audio/';
+      
+      const response = await fetch(apiUrl, {
           method: 'POST',
-          body: formData
+          body: formData,
+          headers: {
+              'Accept': 'application/json'
+          }
       });
 
       if (!response.ok) throw new Error(`Server error: ${response.status}`);
