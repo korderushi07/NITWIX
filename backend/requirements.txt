@@ -1,0 +1,6 @@
+transformers 
+torch 
+soundfile
+fastapi
+scipy 
+scipy
