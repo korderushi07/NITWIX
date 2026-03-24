@@ -4,3 +4,5 @@ soundfile
 fastapi
 scipy 
 scipy
+sounddevice
+faster-whisper

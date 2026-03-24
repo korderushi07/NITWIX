@@ -3,18 +3,17 @@ import numpy as np
 import scipy.io.wavfile as wav
 import tempfile
 import os
-from huggingface_hub import InferenceClient
+from faster_whisper import WhisperModel
 
 # -----------------------------
 # CONFIG
 # -----------------------------
-HF_TOKEN = os.getenv("HF_TOKEN")
-client = InferenceClient(token=HF_TOKEN)
-
-MODEL = "openai/whisper-small"  # use tiny if slow
-
 SAMPLE_RATE = 16000
 CHUNK_DURATION = 3  # seconds
+
+# 🔥 Load local Whisper model
+# Use "tiny" for fastest, "small" for better accuracy
+model = WhisperModel("tiny", compute_type="int8")
 
 
 # -----------------------------
@@ -22,16 +21,18 @@ CHUNK_DURATION = 3  # seconds
 # -----------------------------
 def record_chunk(duration=CHUNK_DURATION):
     print("🎤 Listening...")
-    recording = sd.rec(int(duration * SAMPLE_RATE),
-                       samplerate=SAMPLE_RATE,
-                       channels=1,
-                       dtype='int16')
+    recording = sd.rec(
+        int(duration * SAMPLE_RATE),
+        samplerate=SAMPLE_RATE,
+        channels=1,
+        dtype="int16"
+    )
     sd.wait()
     return recording
 
 
 # -----------------------------
-# S2T USING HF
+# SPEECH TO TEXT (LOCAL)
 # -----------------------------
 def speech_to_text(audio_array):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
@@ -39,12 +40,14 @@ def speech_to_text(audio_array):
         temp_path = tmp.name
 
     try:
-        with open(temp_path, "rb") as f:
-            result = client.automatic_speech_recognition(
-                audio=f,
-                model=MODEL
-            )
-        return result["text"]
+        segments, _ = model.transcribe(temp_path)
+
+        text = ""
+        for segment in segments:
+            text += segment.text
+
+        return text.strip()
+
     finally:
         os.remove(temp_path)
 
@@ -63,7 +66,7 @@ def realtime_transcription():
 
             text = speech_to_text(audio_chunk)
 
-            if text.strip():
+            if text:
                 full_text += " " + text
                 print("📝", full_text)
 
@@ -71,7 +74,7 @@ def realtime_transcription():
         print("\n🛑 Stopped.")
         print("\n📄 Final Transcript:\n", full_text)
 
+    return full_text
 
-# -----------------------------
-if __name__ == "__main__":
-    realtime_transcription()
+
+ 
