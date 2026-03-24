@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>CourtScribe — AI Court Transcription System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+  :root {
+    --bg-parchment:#F5F3EE;--bg-surface:#FFFFFF;--bg-dark:#1A1E28;--bg-dark2:#232838;
+    --navy:#1E3A5F;--navy-light:#2A5298;--navy-pale:#E8EFF8;
+    --gold:#B8943F;--gold-light:#C9A84C;--gold-pale:#FBF6E9;
+    --text-primary:#111318;--text-secondary:#4A5568;--text-muted:#8A94A6;
+    --conf-hi:#1E6B3C;--conf-hi-bg:#E6F5EC;
+    --conf-mid:#92600A;--conf-mid-bg:#FEF3E2;
+    --conf-lo:#8B1A1A;--conf-lo-bg:#FEE8E8;
+    --border:#DDD8CE;--border-light:#EAE7E0;
+    --judge:#1E3A5F;--judge-bg:#E8EFF8;
+    --advocate:#4A2080;--advocate-bg:#F0EAF8;
+    --witness:#3D5060;--witness-bg:#EBF0F3;
+    --radius:4px;--radius-md:6px;--radius-lg:8px;
+    --shadow:0 1px 4px rgba(0,0,0,0.08);--shadow-md:0 2px 12px rgba(0,0,0,0.10);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg-parchment);color:var(--text-primary);font-size:14px;line-height:1.6;min-height:100vh;overflow-x:hidden}
+
+  /* ── TOPBAR ── */
+  #topbar{position:fixed;top:0;left:0;right:0;height:56px;background:var(--bg-dark);display:flex;align-items:center;gap:16px;padding:0 20px;z-index:100;border-bottom:1px solid rgba(200,160,60,0.25)}
+  .logo-wrap{display:flex;align-items:center;gap:10px;min-width:190px}
+  .seal{width:34px;height:34px;flex-shrink:0}
+  .logo-text{font-family:'Playfair Display',serif;font-size:17px;font-weight:600;color:#F5F0E8;letter-spacing:0.3px}
+  .logo-sub{font-size:9px;color:var(--gold-light);letter-spacing:1.8px;text-transform:uppercase;font-weight:500;display:block;margin-top:-2px}
+  .case-title-bar{flex:1;text-align:center}
+  .case-name{font-family:'Playfair Display',serif;font-size:13px;color:#D4C99A;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .case-sub{font-size:10px;color:rgba(255,255,255,0.4);letter-spacing:0.8px;text-transform:uppercase}
+  .top-controls{display:flex;align-items:center;gap:10px;min-width:300px;justify-content:flex-end}
+  .live-badge{display:flex;align-items:center;gap:6px;background:rgba(220,40,40,0.15);border:1px solid rgba(220,40,40,0.35);border-radius:3px;padding:3px 10px;font-size:11px;font-weight:600;color:#FF6B6B;letter-spacing:1.2px}
+  .live-dot{width:7px;height:7px;border-radius:50%;background:#FF4444;animation:pulse 1.4s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.6;transform:scale(0.85)}}
+  .lang-toggle{display:flex;background:rgba(255,255,255,0.07);border-radius:3px;overflow:hidden;border:1px solid rgba(255,255,255,0.12)}
+  .lang-btn{padding:4px 10px;font-size:11px;color:rgba(255,255,255,0.55);cursor:pointer;border:none;background:transparent;font-family:'IBM Plex Sans',sans-serif;transition:all 0.15s;letter-spacing:0.5px}
+  .lang-btn.active{background:rgba(200,160,60,0.2);color:var(--gold-light);font-weight:500}
+  .auth-btn{display:flex;align-items:center;gap:7px;padding:6px 14px;border-radius:3px;font-size:12px;cursor:pointer;border:none;font-family:'IBM Plex Sans',sans-serif;font-weight:500;transition:all 0.2s;letter-spacing:0.3px}
+  .auth-btn.locked{background:rgba(139,26,26,0.2);color:#FF8080;border:1px solid rgba(139,26,26,0.4)}
+  .auth-btn.locked:hover{background:rgba(139,26,26,0.3)}
+  .auth-btn.unlocked{background:rgba(30,107,60,0.2);color:#6EC98A;border:1px solid rgba(30,107,60,0.4)}
+  .session-timer{font-size:10px;color:rgba(255,255,255,0.4);font-family:'IBM Plex Mono',monospace;letter-spacing:0.5px}
+
+  /* ── MAIN LAYOUT ── */
+  #main{display:flex;margin-top:56px;height:calc(100vh - 56px)}
+
+  /* ── LEFT PANEL ── */
+  #left-panel{width:42%;min-width:360px;display:flex;flex-direction:column;border-right:1px solid var(--border);background:var(--bg-parchment)}
+  .panel-header{padding:12px 20px;background:var(--bg-surface);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+  .panel-title{font-family:'Playfair Display',serif;font-size:14px;font-weight:600;color:var(--navy);display:flex;align-items:center;gap:8px}
+  .panel-title svg{opacity:0.6}
+  .transcript-controls{display:flex;gap:8px;align-items:center}
+  .ctrl-btn{padding:4px 10px;border:1px solid var(--border);border-radius:3px;font-size:11px;cursor:pointer;background:var(--bg-surface);color:var(--text-secondary);font-family:'IBM Plex Sans',sans-serif;transition:all 0.15s}
+  .ctrl-btn:hover{background:var(--bg-parchment);border-color:var(--navy);color:var(--navy)}
+  .ctrl-btn.danger{border-color:rgba(139,26,26,0.3);color:var(--conf-lo)}
+  .ctrl-btn.danger:hover{background:#FEE8E8}
+  .ctrl-btn.primary{border-color:var(--navy);color:#fff;background:var(--navy)}
+  .ctrl-btn.primary:hover{background:var(--navy-light);color:#fff}
+
+  #transcript-area{flex:1;overflow-y:auto;padding:20px 24px;padding-bottom:80px;scroll-behavior:smooth}
+  #transcript-area::-webkit-scrollbar{width:5px}
+  #transcript-area::-webkit-scrollbar-track{background:transparent}
+  #transcript-area::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+  .doc-header{text-align:center;padding:16px 0 24px;border-bottom:2px solid var(--border);margin-bottom:24px}
+  .doc-header h2{font-family:'Playfair Display',serif;font-size:16px;font-weight:700;color:var(--text-primary);letter-spacing:0.5px}
+  .doc-header p{font-size:11px;color:var(--text-muted);margin-top:4px;letter-spacing:0.8px;text-transform:uppercase}
+  .doc-meta{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:12px;text-align:left;font-size:11px}
+  .doc-meta-item{color:var(--text-secondary)}.doc-meta-item strong{color:var(--text-primary);font-weight:500}
+
+  .speaker-block{margin-bottom:24px}
+  .speaker-header{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .speaker-badge{padding:2px 10px;border-radius:2px;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase}
+  .badge-judge{background:var(--judge-bg);color:var(--judge);border:1px solid rgba(30,58,95,0.2)}
+  .badge-advocate{background:var(--advocate-bg);color:var(--advocate);border:1px solid rgba(74,32,128,0.2)}
+  .badge-witness{background:var(--witness-bg);color:var(--witness);border:1px solid rgba(61,80,96,0.2)}
+  .speaker-name{font-size:12px;font-weight:600;color:var(--text-secondary)}
+  .speaker-time{margin-left:auto;font-size:10px;color:var(--text-muted);font-family:'IBM Plex Mono',monospace}
+  .transcript-text{font-family:'IBM Plex Mono',monospace;font-size:13.5px;line-height:1.9;color:var(--text-primary)}
+  .t-word{cursor:pointer;padding:0 1px;border-radius:2px;transition:all 0.12s;position:relative}
+  .t-word:hover{background:rgba(30,58,95,0.12);border-radius:2px}
+  .t-word.hi{color:var(--conf-hi)}
+  .t-word.mid{color:var(--conf-mid)}
+  .t-word.lo{color:var(--conf-lo);text-decoration:wavy underline;text-decoration-color:rgba(139,26,26,0.4)}
+  .t-word.corrected::after{content:'✓';font-size:8px;vertical-align:super;color:var(--conf-hi);margin-left:1px;font-family:sans-serif}
+  .speaker-divider{border:none;border-top:1px solid var(--border-light);margin:20px 0}
+  .page-break{text-align:center;padding:8px 0;font-size:10px;color:var(--text-muted);letter-spacing:2px;text-transform:uppercase;border-top:1px dashed var(--border);border-bottom:1px dashed var(--border);margin:20px 0;font-family:'IBM Plex Mono',monospace}
+  .hindi-translation{background:rgba(30,58,95,0.04);border-left:2px solid rgba(30,58,95,0.2);padding:6px 10px;margin-top:6px;font-size:12px;color:var(--text-secondary);font-style:italic;border-radius:0 3px 3px 0}
+
+  .transcript-footer{padding:16px 24px;border-top:2px solid var(--border);background:var(--bg-surface);flex-shrink:0}
+  .footer-cert{font-size:10px;color:var(--text-muted);text-align:center;letter-spacing:0.5px;line-height:1.8}
+  .footer-cert strong{color:var(--text-secondary);font-weight:500}
+
+  /* ── WORD POPUP ── */
+  .word-popup{position:fixed;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:12px;z-index:200;box-shadow:var(--shadow-md);width:220px;display:none}
+  .word-popup.visible{display:block}
+  .popup-word{font-family:'Playfair Display',serif;font-size:16px;font-weight:600;color:var(--text-primary);margin-bottom:8px}
+  .popup-conf{margin-bottom:10px}
+  .popup-conf-label{font-size:10px;color:var(--text-muted);letter-spacing:0.8px;text-transform:uppercase;margin-bottom:4px}
+  .conf-bar-track{height:5px;background:var(--border);border-radius:3px;overflow:hidden}
+  .conf-bar-fill{height:100%;border-radius:3px;transition:width 0.3s}
+  .conf-val{font-size:11px;font-weight:600;margin-top:3px}
+  .popup-actions{display:flex;gap:6px;margin-top:10px}
+  .popup-btn{flex:1;padding:5px 8px;border:1px solid var(--border);border-radius:3px;font-size:11px;cursor:pointer;background:var(--bg-parchment);color:var(--text-secondary);font-family:'IBM Plex Sans',sans-serif;text-align:center;transition:all 0.15s}
+  .popup-btn:hover{border-color:var(--navy);color:var(--navy)}
+  .popup-edit{width:100%;margin-top:8px;padding:5px 8px;border:1px solid var(--border);border-radius:3px;font-family:'IBM Plex Mono',monospace;font-size:12px;background:var(--bg-parchment);color:var(--text-primary);display:none}
+  .popup-edit.show{display:block}
+  .popup-lock-msg{font-size:11px;color:var(--text-muted);margin-top:8px;display:flex;align-items:center;gap:5px}
+  .popup-close{position:absolute;top:8px;right:8px;background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:14px;line-height:1;padding:2px}
+
+  /* ── RIGHT PANEL ── */
+  #right-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg-surface)}
+  .tab-bar{display:flex;background:var(--bg-dark);padding:0 16px;gap:2px;overflow-x:auto;flex-shrink:0;border-bottom:2px solid rgba(200,160,60,0.2)}
+  .tab-bar::-webkit-scrollbar{height:3px}
+  .tab-bar::-webkit-scrollbar-thumb{background:rgba(200,160,60,0.2)}
+  .tab-btn{padding:13px 14px 11px;font-size:11px;font-weight:500;color:rgba(255,255,255,0.45);cursor:pointer;border:none;background:transparent;font-family:'IBM Plex Sans',sans-serif;white-space:nowrap;letter-spacing:0.5px;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all 0.15s;display:flex;align-items:center;gap:5px}
+  .tab-btn:hover{color:rgba(255,255,255,0.7)}
+  .tab-btn.active{color:var(--gold-light);border-bottom-color:var(--gold-light)}
+  .tab-icon{font-size:13px}
+  .tab-content{flex:1;overflow-y:auto;padding:20px;scroll-behavior:smooth}
+  .tab-content::-webkit-scrollbar{width:5px}
+  .tab-content::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+  .tab-pane{display:none}
+  .tab-pane.active{display:block}
+
+  /* ── TAB SECTION COMMON ── */
+  .section-title{font-family:'Playfair Display',serif;font-size:15px;font-weight:600;color:var(--navy);margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+  .card{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:12px;border-left:3px solid var(--gold);box-shadow:var(--shadow)}
+  .card.navy-accent{border-left-color:var(--navy)}
+  .card.danger-accent{border-left-color:var(--conf-lo)}
+  .card.success-accent{border-left-color:var(--conf-hi)}
+
+  /* Summary */
+  .summary-stamp{text-align:center;padding:24px;position:relative}
+  .stamp-circle{width:120px;height:120px;border:4px solid var(--conf-lo);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;flex-direction:column;transform:rotate(-12deg);background:var(--conf-lo-bg)}
+  .stamp-text{font-family:'Playfair Display',serif;font-size:13px;font-weight:700;color:var(--conf-lo);text-transform:uppercase;letter-spacing:1.5px;line-height:1.3;text-align:center}
+  .summary-card{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;border-left:3px solid var(--navy)}
+  .summary-title{font-family:'Playfair Display',serif;font-size:14px;font-weight:600;color:var(--navy);margin-bottom:8px}
+  .summary-text{font-size:13px;color:var(--text-secondary);line-height:1.8}
+  .summary-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+  .stat-box{background:var(--bg-parchment);border:1px solid var(--border);border-radius:var(--radius-md);padding:10px;text-align:center}
+  .stat-val{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:var(--navy)}
+  .stat-label{font-size:10px;color:var(--text-muted);margin-top:2px;letter-spacing:0.5px;text-transform:uppercase}
+  .export-bar{display:flex;gap:8px;margin-top:16px}
+  .export-btn{flex:1;padding:9px;border:1px solid var(--border);border-radius:3px;font-size:12px;cursor:pointer;background:var(--bg-parchment);color:var(--navy);font-family:'IBM Plex Sans',sans-serif;font-weight:500;transition:all 0.15s;letter-spacing:0.3px}
+  .export-btn:hover{background:var(--navy);color:#fff;border-color:var(--navy)}
+
+  /* ── MODALS ── */
+  .modal-overlay{position:fixed;inset:0;background:rgba(10,14,22,0.82);z-index:500;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+  .modal-overlay.hidden{display:none}
+  .auth-modal{background:var(--bg-surface);border-radius:var(--radius-lg);width:380px;overflow:hidden;border:1px solid var(--border);box-shadow:0 8px 40px rgba(0,0,0,0.35)}
+  .auth-modal-header{background:var(--navy);padding:20px;text-align:center}
+  .auth-modal-header h3{font-family:'Playfair Display',serif;font-size:17px;font-weight:600;color:#fff;letter-spacing:0.3px}
+  .auth-modal-header p{font-size:11px;color:rgba(255,255,255,0.5);margin-top:4px;letter-spacing:0.8px;text-transform:uppercase}
+  .auth-body{padding:24px}
+  .fp-ring-wrap{display:flex;justify-content:center;margin-bottom:20px}
+  .fp-outer{width:88px;height:88px;border-radius:50%;border:2px solid var(--navy-pale);display:flex;align-items:center;justify-content:center;position:relative;cursor:pointer;transition:all 0.3s}
+  .fp-outer:hover{border-color:var(--navy)}
+  .fp-outer.scanning .fp-ring1{animation:ring1 1.5s ease-out infinite}
+  .fp-outer.scanning .fp-ring2{animation:ring1 1.5s ease-out infinite 0.5s}
+  .fp-ring1,.fp-ring2{position:absolute;inset:0;border-radius:50%;border:2px solid var(--navy);opacity:0}
+  @keyframes ring1{0%{transform:scale(1);opacity:0.6}100%{transform:scale(1.7);opacity:0}}
+  .fp-icon{font-size:36px;user-select:none;z-index:1}
+  .pin-label{text-align:center;font-size:12px;color:var(--text-secondary);margin-bottom:12px;letter-spacing:0.3px}
+  .pin-row{display:flex;justify-content:center;gap:10px;margin-bottom:16px}
+  .pin-digit{width:42px;height:48px;border:1.5px solid var(--border);border-radius:var(--radius-md);font-family:'IBM Plex Mono',monospace;font-size:22px;text-align:center;background:var(--bg-parchment);color:var(--text-primary);transition:border-color 0.2s;outline:none}
+  .pin-digit:focus{border-color:var(--navy);background:var(--bg-surface)}
+  .auth-submit{width:100%;padding:11px;background:var(--navy);color:#fff;border:none;border-radius:3px;font-size:13px;font-weight:500;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;letter-spacing:0.5px;margin-top:4px;transition:background 0.15s}
+  .auth-submit:hover{background:var(--navy-light)}
+  .auth-submit:disabled{opacity: 0.7; cursor: not-allowed;}
+  .auth-cancel{width:100%;padding:9px;background:transparent;color:var(--text-muted);border:1px solid var(--border);border-radius:3px;font-size:12px;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;margin-top:8px;transition:all 0.15s}
+  .auth-cancel:hover{border-color:var(--text-muted);color:var(--text-secondary)}
+  .auth-judge-label{text-align:center;font-size:11px;color:var(--text-muted);margin-bottom:16px}
+  .auth-judge-label strong{color:var(--text-primary);font-weight:600}
+  .auth-error{text-align:center;font-size:12px;color:var(--conf-lo);margin-top:8px;min-height:18px}
+
+  /* ── CASE CLOSED OVERLAY ── */
+  .case-closed-overlay{position:fixed;inset:0;background:rgba(10,14,22,0.6);z-index:400;display:flex;align-items:center;justify-content:center;display:none}
+  .case-closed-stamp{font-family:'Playfair Display',serif;font-size:48px;font-weight:700;color:var(--conf-lo);border:8px solid var(--conf-lo);padding:16px 32px;border-radius:6px;transform:rotate(-8deg);letter-spacing:3px;text-transform:uppercase;background:rgba(255,232,232,0.92);animation:stampIn 0.5s cubic-bezier(0.2,0.8,0.3,1.1) both}
+  @keyframes stampIn{0%{transform:rotate(-8deg) scale(2.5);opacity:0}100%{transform:rotate(-8deg) scale(1);opacity:1}}
+
+  /* ── STATUS BAR ── */
+  .status-bar{padding:8px 20px;background:var(--bg-dark2);border-top:1px solid rgba(200,160,60,0.15);display:flex;align-items:center;gap:16px;font-size:11px;color:rgba(255,255,255,0.4);flex-shrink:0}
+  .status-item{display:flex;align-items:center;gap:5px;letter-spacing:0.3px}
+  .status-dot{width:6px;height:6px;border-radius:50%}
+  .status-dot.green{background:#4ADE80}
+  .status-dot.blue{background:#60A5FA}
+
+  /* Markdown Body Fix */
+  .markdown-body h1, .markdown-body h2, .markdown-body h3 { font-size: 14px; margin-bottom: 8px; color: var(--navy); }
+  .markdown-body p { margin-bottom: 8px; }
+  .markdown-body ul { padding-left: 20px; list-style-type: disc; margin-bottom: 8px; }
+  .markdown-body strong { font-weight: 600; color: var(--text-primary); }
+</style>
+</head>
+<body>
+
+<!-- ── TOPBAR ── -->
+<div id="topbar">
+  <div class="logo-wrap">
+    <svg class="seal" viewBox="0 0 34 34" fill="none">
+      <circle cx="17" cy="17" r="16" stroke="#C9A84C" stroke-width="1.2"/>
+      <circle cx="17" cy="17" r="12" stroke="#C9A84C" stroke-width="0.6" stroke-dasharray="2 2"/>
+      <text x="17" y="14" text-anchor="middle" font-family="serif" font-size="8" fill="#C9A84C" font-weight="700">⚖</text>
+      <text x="17" y="22" text-anchor="middle" font-family="sans-serif" font-size="4" fill="#C9A84C" letter-spacing="1">COURT</text>
+      <text x="17" y="27" text-anchor="middle" font-family="sans-serif" font-size="3.5" fill="rgba(201,168,76,0.6)" letter-spacing="0.5">OF INDIA</text>
+    </svg>
+    <div>
+      <div class="logo-text">CourtScribe</div>
+      <div class="logo-sub">AI Transcription System</div>
+    </div>
+  </div>
+
+  <div class="case-title-bar">
+    <div class="case-name">State of Maharashtra v. Rajan Mehta</div>
+    <div class="case-sub">Sessions Case No. CBI/Spl./22/2024 · Pune District Court</div>
+  </div>
+
+  <div class="top-controls">
+    <div id="live-badge" class="live-badge">
+      <span class="live-dot"></span>
+      LIVE
+    </div>
+    <div class="lang-toggle">
+      <button class="lang-btn active" onclick="setLang('en')">English</button>
+      <button class="lang-btn" onclick="setLang('hi')">Hindi</button>
+      <button class="lang-btn" onclick="setLang('mix')">Hinglish</button>
+    </div>
+    <div id="session-timer" class="session-timer" style="display:none">Session: <span id="timer-val">00:00</span></div>
+    <button id="auth-btn" class="auth-btn locked" onclick="openAuth()">
+      <span id="auth-icon">🔒</span>
+      <span id="auth-label">Authenticate</span>
+    </button>
+  </div>
+</div>
+
+<!-- ── MAIN ── -->
+<div id="main">
+
+  <!-- ── LEFT: TRANSCRIPT ── -->
+  <div id="left-panel">
+    <div class="panel-header">
+      <div class="panel-title">
+        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        Live Transcript
+      </div>
+      <div class="transcript-controls">
+        <button class="ctrl-btn primary" onclick="openAudioModal()">🎙 Upload Audio</button>
+        <button class="ctrl-btn" onclick="togglePause()">⏸ Pause</button>
+        <button class="ctrl-btn" onclick="scrollBottom()">↓ Latest</button>
+        <button class="ctrl-btn danger" onclick="closeCase()">🔴 Close Case</button>
+      </div>
+    </div>
+
+    <div id="transcript-area">
+      <div class="doc-header">
+        <h2>Official Court Transcript</h2>
+        <p>Sessions Case No. CBI/Spl./22/2024</p>
+        <div class="doc-meta">
+          <div class="doc-meta-item">Court: <strong>Pune Sessions Court</strong></div>
+          <div class="doc-meta-item">Date: <strong>24 March 2026</strong></div>
+          <div class="doc-meta-item">Presiding: <strong>Hon. Justice Priya Nair</strong></div>
+          <div class="doc-meta-item">Time: <strong>10:00 AM – ongoing</strong></div>
+        </div>
+      </div>
+
+      <!-- Live blocks will be dynamically injected here... -->
+      <div class="speaker-block" id="placeholder-block">
+        <div class="speaker-header">
+          <span class="speaker-badge badge-judge">System</span>
+          <span class="speaker-name">CourtScribe AI Initialization</span>
+        </div>
+        <div class="transcript-text" id="live-text">
+          <span class="t-word hi" data-word="Waiting" data-conf="99">Waiting</span>
+          <span class="t-word hi" data-word="for" data-conf="99">for</span>
+          <span class="t-word hi" data-word="audio" data-conf="99">audio</span>
+          <span class="t-word hi" data-word="input..." data-conf="99">input...</span>
+          <span id="cursor-blink" style="display:inline-block;width:2px;height:14px;background:var(--navy);vertical-align:middle;animation:blink 1s step-end infinite;margin-left:3px"></span>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="transcript-footer">
+      <p class="footer-cert">
+        <strong>Certified by CourtScribe AI v2.1</strong> &nbsp;|&nbsp; District Court of Pune, Maharashtra &nbsp;|&nbsp;
+        Generated: <span id="footer-date">24 March 2026</span> &nbsp;|&nbsp; <strong>Confidence: 94.2%</strong>
+      </p>
+    </div>
+  </div>
+
+  <!-- ── RIGHT PANEL ── -->
+  <div id="right-panel">
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="setTab(0)" id="tab-0"><span class="tab-icon">📊</span>Summary</button>
+      <button class="tab-btn" onclick="setTab(1)" id="tab-1"><span class="tab-icon">📌</span>Keywords</button>
+      <button class="tab-btn" onclick="setTab(2)" id="tab-2"><span class="tab-icon">🕒</span>Timeline</button>
+      <button class="tab-btn" onclick="setTab(3)" id="tab-3"><span class="tab-icon">📂</span>Case File</button>
+    </div>
+
+    <div class="tab-content">
+
+      <!-- ── TAB 0: SUMMARY ── -->
+      <div class="tab-pane active" id="pane-0">
+        <div class="section-title">📊 Case Summary</div>
+
+        <div id="summary-open">
+          <div class="card navy-accent" style="text-align:center;padding:20px">
+            <div style="font-size:28px;margin-bottom:8px">⏳</div>
+            <div style="font-family:'Playfair Display',serif;font-size:14px;font-weight:600;color:var(--navy);margin-bottom:6px">Waiting for Audio Session</div>
+            <div style="font-size:12px;color:var(--text-secondary);line-height:1.8">Upload audio files using the <strong>"Upload Audio"</strong> button in the transcript panel to generate the final summary auto-magically.</div>
+          </div>
+        </div>
+
+        <div id="summary-closed" style="display:none">
+          <div class="summary-stamp">
+            <div class="stamp-circle">
+              <div class="stamp-text">CASE<br>PROCESSED</div>
+            </div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-title">AI-Generated Courtroom Summary</div>
+            <div class="summary-text markdown-body">
+              Awaiting data...
+            </div>
+          </div>
+          <div class="export-bar">
+            <button class="export-btn">↓ PDF Report</button>
+            <button class="export-btn">↓ DOCX</button>
+            <button class="export-btn">🖨 Print</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB 1: KEYWORDS ── -->
+      <div class="tab-pane" id="pane-1">
+        <div class="section-title">⚖ Detected Legal Keywords & Entities</div>
+        <div class="card navy-accent" style="margin-bottom:14px">
+          <div style="font-size:11px;font-weight:600;color:var(--text-muted);letter-spacing:0.8px;text-transform:uppercase;margin-bottom:10px">IPC Sections</div>
+          <div class="keyword-chips">
+            <span class="chip chip-legal">IPC §302 — Murder</span>
+            <span class="chip chip-legal">IPC §120B — Criminal Conspiracy</span>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:14px">
+          <div style="font-size:11px;font-weight:600;color:var(--text-muted);letter-spacing:0.8px;text-transform:uppercase;margin-bottom:10px">People Identified</div>
+          <div class="keyword-chips">
+            <span class="chip chip-person">Rajan Mehta (Accused)</span>
+            <span class="chip chip-person">Justice Priya Nair</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB 2: TIMELINE ── -->
+      <div class="tab-pane" id="pane-2">
+        <div class="section-title">🕒 Auto-Generated Case Timeline</div>
+        <div class="timeline">
+          <div class="tl-item">
+            <div class="tl-dot milestone"></div>
+            <div class="tl-body">
+              <div class="tl-time">14 Jan 2024</div>
+              <div class="tl-event">Incident Reported</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB 3: CASE FILE ── -->
+      <div class="tab-pane" id="pane-3">
+        <div class="section-title">📂 Structured Case File</div>
+        <div class="accordion">
+          <div class="acc-header" onclick="toggleAcc(this)">
+            <span class="acc-icon">👤</span>
+            <span class="acc-title">People Involved</span>
+            <span class="acc-count">2</span>
+            <span class="acc-arrow">▼</span>
+          </div>
+          <div class="acc-body open">
+            <div class="person-row">
+              <div class="person-avatar" style="background:#FEE8E8;color:var(--conf-lo)">RM</div>
+              <div class="person-info"><div class="person-name">Rajan Mehta</div><div class="person-role-text">Accused</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /tab-content -->
+
+    <!-- Status bar -->
+    <div class="status-bar">
+      <div class="status-item"><div class="status-dot green"></div>AI Engine Online</div>
+      <div class="status-item"><div class="status-dot blue"></div>NLP Model: CourtScribe-v2.1</div>
+      <div class="status-item" style="margin-left:auto;font-family:'IBM Plex Mono',monospace" id="word-count">Words: 0</div>
+      <div class="status-item" style="font-family:'IBM Plex Mono',monospace" id="current-time-bar">00:00:00</div>
+    </div>
+  </div><!-- /right-panel -->
+</div><!-- /main -->
+
+<!-- ── AUDIO MODAL ── -->
+<div class="modal-overlay hidden" id="audio-overlay">
+  <div class="auth-modal" style="width: 450px;">
+    <div class="auth-modal-header">
+      <h3>Process Session Audio</h3>
+      <p>Upload multi-speaker recordings</p>
+    </div>
+    <div class="auth-body">
+      <form id="multiAudioForm">
+        <div style="margin-bottom: 12px; font-size: 13px;"><strong>Speaker 1 (Judge):</strong> <input type="file" id="speaker1" name="speaker1" accept="audio/*" required style="width: 100%; border: 1px solid var(--border); padding: 5px; margin-top: 4px; border-radius: 3px; background: var(--bg-parchment);"></div>
+        <div style="margin-bottom: 12px; font-size: 13px;"><strong>Speaker 2 (Advocate):</strong> <input type="file" id="speaker2" name="speaker2" accept="audio/*" required style="width: 100%; border: 1px solid var(--border); padding: 5px; margin-top: 4px; border-radius: 3px; background: var(--bg-parchment);"></div>
+        <div style="margin-bottom: 16px; font-size: 13px;"><strong>Speaker 3 (Witness):</strong> <input type="file" id="speaker3" name="speaker3" accept="audio/*" required style="width: 100%; border: 1px solid var(--border); padding: 5px; margin-top: 4px; border-radius: 3px; background: var(--bg-parchment);"></div>
+        
+        <div class="auth-error" id="audio-error"></div>
+        <button type="submit" class="auth-submit" id="audio-submit-btn">Process Court Audio</button>
+        <button type="button" class="auth-cancel" onclick="closeAudioModal()">Cancel</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ── AUTH MODAL ── -->
+<div class="modal-overlay hidden" id="auth-overlay">
+  <div class="auth-modal">
+    <div class="auth-modal-header">
+      <h3>Judicial Authentication</h3>
+      <p>District Court of Pune — Secure Access</p>
+    </div>
+    <div class="auth-body">
+      <div class="auth-judge-label">Authenticating as: <strong>Hon. Justice Priya Nair</strong></div>
+      <div class="fp-ring-wrap">
+        <div class="fp-outer" id="fp-outer" onclick="startFingerprint()">
+          <div class="fp-ring1"></div>
+          <div class="fp-ring2"></div>
+          <div class="fp-icon" id="fp-icon">👆</div>
+        </div>
+      </div>
+      <div class="pin-label">Or enter 6-digit Judicial PIN</div>
+      <div class="pin-row">
+        <input type="password" class="pin-digit" maxlength="1" id="p0" oninput="pinInput(0)" onkeydown="pinKey(event,0)"/>
+        <input type="password" class="pin-digit" maxlength="1" id="p1" oninput="pinInput(1)" onkeydown="pinKey(event,1)"/>
+        <input type="password" class="pin-digit" maxlength="1" id="p2" oninput="pinInput(2)" onkeydown="pinKey(event,2)"/>
+        <input type="password" class="pin-digit" maxlength="1" id="p3" oninput="pinInput(3)" onkeydown="pinKey(event,3)"/>
+        <input type="password" class="pin-digit" maxlength="1" id="p4" oninput="pinInput(4)" onkeydown="pinKey(event,4)"/>
+        <input type="password" class="pin-digit" maxlength="1" id="p5" oninput="pinInput(5)" onkeydown="pinKey(event,5)"/>
+      </div>
+      <div class="auth-error" id="auth-error"></div>
+      <button class="auth-submit" onclick="submitAuth()">Authenticate Session</button>
+      <button class="auth-cancel" onclick="closeAuth()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Case Closed Overlay -->
+<div class="case-closed-overlay" id="case-closed-overlay" onclick="this.style.display='none'">
+  <div class="case-closed-stamp">CASE CLOSED</div>
+</div>
+
+<script>
+// ── STATE ──
+let authenticated = false;
+let currentLang = 'en';
+let sessionSeconds = 0;
+let sessionInterval = null;
+let activeTab = 0;
+let totalWordCount = 0;
+
+// ── INIT TABS ──
+function setTab(n) {
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>b.classList.toggle('active',i===n));
+  document.querySelectorAll('.tab-pane').forEach((p,i)=>p.classList.toggle('active',i===n));
+  activeTab = n;
+}
+
+// ── AUDIO UPLOAD MODAL ──
+function openAudioModal() {
+  document.getElementById('audio-overlay').classList.remove('hidden');
+  document.getElementById('audio-error').textContent = '';
+  document.getElementById('multiAudioForm').reset();
+}
+function closeAudioModal() {
+  document.getElementById('audio-overlay').classList.add('hidden');
+}
+
+// ── API INTEGRATION ──
+document.getElementById('multiAudioForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('audio-submit-btn');
+  const errorEl = document.getElementById('audio-error');
+  
+  btn.textContent = 'Processing... Please wait';
+  btn.disabled = true;
+  errorEl.textContent = '';
+  
+  try {
+      const formData = new FormData(e.target);
+      const host = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+        ? window.location.origin 
+        : 'http://127.0.0.1:8000';
+      
+      const response = await fetch(`${host}/process-multi-audio/`, {
+          method: 'POST',
+          body: formData
+      });
+
+      if (!response.ok) throw new Error(`Server error: ${response.status}`);
+      const data = await response.json();
+      
+      if (data.error) throw new Error(data.error);
+
+      renderAudioResults(data);
+      closeAudioModal();
+      
+  } catch (error) {
+      errorEl.style.color = 'var(--conf-lo)';
+      errorEl.textContent = 'Error: ' + error.message;
+  } finally {
+      btn.textContent = 'Process Court Audio';
+      btn.disabled = false;
+  }
+});
+
+function renderAudioResults(data) {
+  const area = document.getElementById('transcript-area');
+  const docHeaderHtml = area.querySelector('.doc-header').outerHTML;
+  area.innerHTML = docHeaderHtml; // Reset view
+  totalWordCount = 0;
+
+  const addSpeakerBlock = (num, role, badgeClass, text, aiNote) => {
+      const timeStr = `10:${30+num}:${Math.floor(Math.random()*60).toString().padStart(2,'0')}`;
+      
+      const words = (text || '').split(/\s+/).map(w => {
+          totalWordCount++;
+          return `<span class="t-word hi" data-word="${w}" data-conf="95">${w}</span>`;
+      }).join(' ');
+
+      const block = document.createElement('div');
+      block.className = 'speaker-block';
+      block.innerHTML = `
+        <div class="speaker-header">
+          <span class="speaker-badge ${badgeClass}">${role}</span>
+          <span class="speaker-name">Speaker ${num}</span>
+          <span class="speaker-time">${timeStr}</span>
+        </div>
+        <div class="transcript-text">
+          ${words}
+        </div>
+        <div class="hindi-translation" style="display:block; margin-top:8px; border-left: 2px solid var(--conf-mid); background: var(--conf-mid-bg);">
+          <strong>AI Insight:</strong> <br> ${marked.parse(aiNote)}
+        </div>
+        <hr class="speaker-divider"/>
+      `;
+      area.appendChild(block);
+  };
+
+  if(data.speaker_1) addSpeakerBlock(1, 'Judge', 'badge-judge', data.speaker_1.transcript, data.speaker_1.ai);
+  if(data.speaker_2) addSpeakerBlock(2, 'Advocate', 'badge-advocate', data.speaker_2.transcript, data.speaker_2.ai);
+  if(data.speaker_3) addSpeakerBlock(3, 'Witness', 'badge-witness', data.speaker_3.transcript, data.speaker_3.ai);
+
+  // Append Live/End indicator
+  const endBlock = document.createElement('div');
+  endBlock.className = 'speaker-block';
+  endBlock.innerHTML = `
+    <div class="speaker-header">
+        <span class="speaker-badge badge-judge">System</span>
+        <span class="speaker-name">CourtScribe AI Initialization</span>
+    </div>
+    <div class="transcript-text">
+        <span class="t-word hi">Processing</span>
+        <span class="t-word hi">Complete.</span>
+        <span id="cursor-blink" style="display:inline-block;width:2px;height:14px;background:var(--navy);vertical-align:middle;animation:blink 1s step-end infinite;margin-left:3px"></span>
+    </div>
+  `;
+  area.appendChild(endBlock);
+
+  // Update Summary Tab
+  document.getElementById('summary-open').style.display = 'none';
+  const summaryClosed = document.getElementById('summary-closed');
+  summaryClosed.style.display = 'block';
+  
+  const summaryTextElement = summaryClosed.querySelector('.summary-text');
+  if(data.final_summary) {
+      summaryTextElement.innerHTML = marked.parse(data.final_summary);
+  } else {
+      summaryTextElement.innerHTML = 'No summary provided.';
+  }
+  
+  document.getElementById('word-count').textContent = 'Words: ' + totalWordCount;
+  setTab(0); // Switch to summary tab
+  scrollBottom();
+}
+
+// ── GENERAL UTILS ──
+function setLang(l) {
+  currentLang = l;
+  document.querySelectorAll('.lang-btn').forEach(b=>{
+    b.classList.toggle('active',b.textContent.toLowerCase().includes(l==='en'?'english':l==='hi'?'hindi':'hinglish'));
+  });
+}
+
+function scrollBottom() {
+  const area = document.getElementById('transcript-area');
+  if(area) area.scrollTop = area.scrollHeight;
+}
+
+let paused = false;
+function togglePause() {
+  paused = !paused;
+  const btn = document.querySelector('.transcript-controls .ctrl-btn:nth-child(2)');
+  const badge = document.getElementById('live-badge');
+  const cursor = document.getElementById('cursor-blink');
+  if(paused) {
+    if(btn) btn.textContent = '▶ Resume';
+    badge.innerHTML = '<span style="width:7px;height:7px;border-radius:50%;background:#888;display:inline-block"></span> PAUSED';
+    badge.style.borderColor = 'rgba(128,128,128,0.3)';
+    badge.style.color = '#AAA';
+    if(cursor) cursor.style.display = 'none';
+  } else {
+    if(btn) btn.textContent = '⏸ Pause';
+    badge.innerHTML = '<span class="live-dot"></span> LIVE';
+    badge.style.borderColor = '';
+    badge.style.color = '';
+    if(cursor) cursor.style.display = 'inline-block';
+  }
+}
+
+function updateClock() {
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2,'0');
+  const m = String(now.getMinutes()).padStart(2,'0');
+  const s = String(now.getSeconds()).padStart(2,'0');
+  const ct = document.getElementById('current-time-bar');
+  if(ct) ct.textContent = h+':'+m+':'+s;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+function closeCase() {
+  if(!authenticated) {
+    alert('Authentication required to close a case.\nPlease authenticate as the presiding judge first.');
+    openAuth();
+    return;
+  }
+  document.getElementById('case-closed-overlay').style.display = 'flex';
+  setTimeout(()=>document.getElementById('case-closed-overlay').style.display='none', 3000);
+}
+
+// ── AUTH LOGIC ──
+function openAuth() {
+  if(authenticated) { logout(); return; }
+  document.getElementById('auth-overlay').classList.remove('hidden');
+  document.getElementById('auth-error').textContent = '';
+  ['p0','p1','p2','p3','p4','p5'].forEach(id=>document.getElementById(id).value='');
+  setTimeout(()=>document.getElementById('p0').focus(), 100);
+}
+function closeAuth() {
+  document.getElementById('auth-overlay').classList.add('hidden');
+}
+function pinInput(i) {
+  const val = document.getElementById('p'+i).value;
+  if(val && i < 5) document.getElementById('p'+(i+1)).focus();
+}
+function pinKey(e, i) {
+  if(e.key === 'Backspace' && !document.getElementById('p'+i).value && i > 0) {
+    document.getElementById('p'+(i-1)).focus();
+  }
+  if(e.key === 'Enter') submitAuth();
+}
+function submitAuth() {
+  const pin = ['p0','p1','p2','p3','p4','p5'].map(id=>document.getElementById(id).value).join('');
+  if(pin.length === 6) {
+    authenticated = true;
+    closeAuth();
+    updateAuthUI();
+  } else {
+    document.getElementById('auth-error').textContent = 'Invalid PIN. Please try again.';
+  }
+}
+function startFingerprint() {
+  const fp = document.getElementById('fp-outer');
+  fp.classList.add('scanning');
+  document.getElementById('fp-icon').textContent = '🔍';
+  setTimeout(()=>{
+    authenticated = true;
+    closeAuth();
+    updateAuthUI();
+    fp.classList.remove('scanning');
+    document.getElementById('fp-icon').textContent = '✅';
+  }, 2000);
+}
+function updateAuthUI() {
+  const btn = document.getElementById('auth-btn');
+  const icon = document.getElementById('auth-icon');
+  const label = document.getElementById('auth-label');
+  if(authenticated) {
+    btn.className = 'auth-btn unlocked';
+    icon.textContent = '🔓';
+    label.textContent = 'Justice Nair';
+  } else {
+    btn.className = 'auth-btn locked';
+    icon.textContent = '🔒';
+    label.textContent = 'Authenticate';
+  }
+}
+function logout() {
+  authenticated = false;
+  updateAuthUI();
+}
+
+function toggleAcc(header) {
+  const body = header.nextElementSibling;
+  const arrow = header.querySelector('.acc-arrow');
+  const isOpen = body.classList.contains('open');
+  body.classList.toggle('open', !isOpen);
+  arrow.classList.toggle('open', !isOpen);
+}
+</script>
+</body>
+</html>
