@@ -1,0 +1,2 @@
+CourtScribe
+Indian district courts still use longhand transcription, causing delays and errors in FIRs and hearing records. Build an AI court transcription assistant that accepts audio input of a legal deposition, transcribes it in real-time, auto-tags speaker roles (judge, advocate, witness), and formats output into a structured legal document.
